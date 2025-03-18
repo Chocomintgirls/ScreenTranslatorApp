@@ -38,6 +38,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+    dependencies {
+        implementation("androidx.appcompat:appcompat:1.7.0")
+        // dependencies อื่นๆ ที่มีอยู่แล้ว...
+    }
 }
 
 flutter {

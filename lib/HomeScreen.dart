@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'GradientBackground.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'FloatingButton.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'overlay_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -89,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       // Power button
                       GestureDetector(
-                        onTap: () {
+                        onTap: () async {
                           setState(() {
                             _isTranslationEnabled = !_isTranslationEnabled;
                             if (_isTranslationEnabled) {
@@ -97,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               _requestOverlayPermission();
                             } else {
                               // Hide the floating button
-                              FloatingButtonService.hideFloatingButton();
+                              OverlayService.hideFloatingButton();
                             }
                           });
                         },
@@ -151,21 +153,38 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Method to request overlay permission and show floating button
+// ใน HomeScreen.dart
   Future<void> _requestOverlayPermission() async {
-    // In a real app, you would need to implement platform-specific code
-    // to request the SYSTEM_ALERT_WINDOW permission on Android
+    print("Requesting overlay permission...");
+    bool isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+    print("Permission already granted? $isGranted");
 
-    // For this example, we'll just show the floating button
-    FloatingButtonService.showFloatingButton(context);
+    if (!isGranted) {
+      print("Requesting permission from user...");
+      isGranted = await FlutterOverlayWindow.requestPermission() ?? false;
+      print("Permission granted after request? $isGranted");
+    }
 
-    // In reality, you would check permission status first:
-    // bool hasPermission = await checkOverlayPermission();
-    // if (hasPermission) {
-    //   FloatingButtonService.showFloatingButton(context);
-    // } else {
-    //   // Request permission
-    //   await requestOverlayPermission();
-    // }
+    if (isGranted) {
+      try {
+        print("Showing floating button...");
+        await OverlayService.showFloatingButton();
+        print("Show floating button called successfully");
+
+        // ตรวจสอบสถานะ
+        final bool? isActive = await FlutterOverlayWindow.isActive();
+        print("Is overlay active? $isActive");
+      } catch (e) {
+        print("Error showing floating button: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error showing floating button: $e')),
+        );
+      }
+    } else {
+      print("Permission denied by user");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enable overlay permission')),
+      );
+    }
   }
 }
