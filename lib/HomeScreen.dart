@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'FloatingButton.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'overlay_service.dart';
+import 'SettingsScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -76,7 +77,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         icon: const Icon(Icons.settings, color: Colors.white),
                         iconSize: 20,
                         onPressed: () {
-                          // Open settings
+                          // Navigate to settings screen
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SettingsScreen(),
+                            ),
+                          );
                         },
                       ),
                     ),
@@ -153,7 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-// ใน HomeScreen.dart
   Future<void> _requestOverlayPermission() async {
     print("Requesting overlay permission...");
     bool isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
@@ -171,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
         await OverlayService.showFloatingButton();
         print("Show floating button called successfully");
 
-        // ตรวจสอบสถานะ
+        // Check status
         final bool? isActive = await FlutterOverlayWindow.isActive();
         print("Is overlay active? $isActive");
       } catch (e) {

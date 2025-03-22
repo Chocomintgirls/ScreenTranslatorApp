@@ -1,5 +1,8 @@
+import 'dart:ui';
+
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'main.dart';
+import 'package:flutter/material.dart';
+import 'FloatingButton.dart';
 
 class OverlayService {
   static Future<void> showFloatingButton() async {
@@ -17,15 +20,15 @@ class OverlayService {
       print("About to show overlay");
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
-        height: 100,
-        width: 100,
-        flag: OverlayFlag.defaultFlag,
+        height: 150,
+        width: 150,
+        flag: OverlayFlag.focusPointer,
         visibility: NotificationVisibility.visibilityPublic,
-        positionGravity: PositionGravity.auto,
+        positionGravity: PositionGravity.none,
       );
       print("showOverlay function completed");
 
-      // ตรวจสอบอีกครั้งว่า overlay กำลังแสดงหรือไม่
+      // Check if overlay is active
       final bool? newIsActive = await FlutterOverlayWindow.isActive();
       print("New isActive status: $newIsActive");
 
