@@ -15,6 +15,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isTranslationEnabled = false;
+  final ValueNotifier<void> _settingsNotifier = ValueNotifier<void>(null); // สร้าง ValueNotifier
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const SettingsScreen(),
+                              builder: (context) => SettingsScreen(settingsNotifier: _settingsNotifier), // ส่ง settingsNotifier
                             ),
                           );
                         },

@@ -74,7 +74,7 @@
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="explanation_for_special_use"/>
+                android:value="This foreground service is required for screen translation overlay functionality"/>
         </service>
 
     </application>

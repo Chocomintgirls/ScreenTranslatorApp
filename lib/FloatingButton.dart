@@ -10,6 +10,7 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:screentranslator/SettingsScreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'TranslationService.dart';
 
@@ -30,6 +31,7 @@ class _FloatingButtonState extends State<FloatingButton> {
   String _targetLanguage = 'th';
   String _TranslateAPI = 'google';
   final screenshotController = ScreenshotController();
+  final ValueNotifier<void> _settingsNotifier = ValueNotifier<void>(null);
 
   final Map<String, String> _languageOptions = {
     'th': 'Thai',
@@ -53,6 +55,19 @@ class _FloatingButtonState extends State<FloatingButton> {
     super.initState();
     _loadPreferences();
     _checkPermissions();
+    _settingsNotifier.addListener(_loadPreferences);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadPreferences(); // โหลดค่าใหม่เมื่อมีการเปลี่ยนแปลง
+  }
+
+  @override
+  void dispose() {
+    _settingsNotifier.removeListener(_loadPreferences); // ลบ listener เมื่อ Widget ถูกทำลาย
+    super.dispose();
   }
 
   Future<void> _checkPermissions() async {
@@ -73,8 +88,8 @@ class _FloatingButtonState extends State<FloatingButton> {
     try {
       final prefs = await SharedPreferences.getInstance();
       setState(() {
-        _targetLanguage = prefs.getString('targetLanguage') ?? 'th';
-        _TranslateAPI = prefs.getString('TranslateAPI') ?? 'google';
+        _targetLanguage = prefs.getString('defaultTargetLanguage') ?? 'th';
+        _TranslateAPI = prefs.getString('selectedTranslationAPI') ?? 'google';
       });
     } catch (e) {
       print('Error loading preferences: $e');
@@ -84,8 +99,8 @@ class _FloatingButtonState extends State<FloatingButton> {
   Future<void> _savePreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('targetLanguage', _targetLanguage);
-      await prefs.setString('TranslateAPI', _TranslateAPI);
+      await prefs.setString('defaultTargetLanguage', _targetLanguage);
+      await prefs.setString('selectedTranslationAPI', _TranslateAPI);
     } catch (e) {
       print('Error saving preferences: $e');
     }
@@ -157,6 +172,14 @@ class _FloatingButtonState extends State<FloatingButton> {
     _resizeOverlay();
   }
 
+  void _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SettingsScreen(settingsNotifier: _settingsNotifier),
+      ),
+    );
+  }
+
   Future<void> _resizeOverlay() async {
     try {
       if (_showTranslateBar) {
@@ -174,17 +197,22 @@ class _FloatingButtonState extends State<FloatingButton> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Screenshot(
-          controller: screenshotController,
-          child: _showTranslateBar
-              ? _buildTranslateBar()
-              : (_isExpanded ? _buildExpandedView() : _buildCollapsedView()),
-        ),
-      ),
+    return ValueListenableBuilder<void>(
+      valueListenable: _settingsNotifier,
+      builder: (context, _, __) {
+        return Material(
+          color: Colors.transparent,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Screenshot(
+              controller: screenshotController,
+              child: _showTranslateBar
+                  ? _buildTranslateBar()
+                  : (_isExpanded ? _buildExpandedView() : _buildCollapsedView()),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -211,17 +239,14 @@ class _FloatingButtonState extends State<FloatingButton> {
   }
 
   Widget _buildTranslateBar() {
-    // Calculate how much space we have for the white bar
-    // Total width minus close button width (60) minus some padding
     const double closeButtonWidth = 60.0;
-    const double totalWidth = 320.0; // Match this with the resizeOverlay width
+    const double totalWidth = 320.0;
     const double whiteBarWidth = totalWidth - closeButtonWidth;
 
     return Container(
       width: totalWidth,
       child: Stack(
         children: [
-          // Invisible full-screen touch area to detect outside taps
           Positioned.fill(
             child: GestureDetector(
               onTap: _toggleTranslateBar,
@@ -229,17 +254,14 @@ class _FloatingButtonState extends State<FloatingButton> {
               child: Container(color: Colors.transparent),
             ),
           ),
-
-          // The actual translate bar
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Row(
-              mainAxisSize: MainAxisSize.min, // Do not stretch
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Close button
                 GestureDetector(
                   onTap: _toggleTranslateBar,
                   child: Container(
@@ -259,8 +281,6 @@ class _FloatingButtonState extends State<FloatingButton> {
                     child: const Icon(Icons.close, color: Colors.white, size: 30),
                   ),
                 ),
-
-                // White bar - with fixed width to prevent overflow
                 Container(
                   width: whiteBarWidth,
                   height: 60,
@@ -278,18 +298,17 @@ class _FloatingButtonState extends State<FloatingButton> {
                       ),
                     ],
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12), // Reduced padding
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min, // Do not stretch
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Language dropdown - with smaller max width
                       Container(
                         constraints: const BoxConstraints(maxWidth: 60),
                         child: DropdownButton<String>(
                           value: _targetLanguage,
                           underline: Container(),
-                          isDense: true, // Make dropdown more compact
-                          iconSize: 16, // Smaller icon
+                          isDense: true,
+                          iconSize: 16,
                           icon: const Icon(Icons.keyboard_arrow_down),
                           items: _languageOptions.entries.map((entry) {
                             return DropdownMenuItem<String>(
@@ -298,7 +317,7 @@ class _FloatingButtonState extends State<FloatingButton> {
                                 entry.key.toUpperCase(),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12, // Smaller text
+                                  fontSize: 12,
                                 ),
                               ),
                             );
@@ -311,22 +330,18 @@ class _FloatingButtonState extends State<FloatingButton> {
                           },
                         ),
                       ),
-
-                      // Divider
                       Container(
                         height: 30,
                         width: 1,
                         color: Colors.grey[300],
-                        margin: const EdgeInsets.symmetric(horizontal: 4), // Reduced margin
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
                       ),
-
-                      // API Dropdown - more compact
                       Expanded(
                         child: DropdownButton<String>(
                           value: _TranslateAPI,
                           underline: Container(),
-                          isDense: true, // Make dropdown more compact
-                          iconSize: 16, // Smaller icon
+                          isDense: true,
+                          iconSize: 16,
                           icon: const Icon(Icons.keyboard_arrow_down),
                           items: _translationAPIOptions.entries.map((entry) {
                             return DropdownMenuItem<String>(
@@ -335,9 +350,9 @@ class _FloatingButtonState extends State<FloatingButton> {
                                 entry.key.toUpperCase(),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12, // Smaller text
+                                  fontSize: 12,
                                 ),
-                                overflow: TextOverflow.ellipsis, // Handle text overflow
+                                overflow: TextOverflow.ellipsis,
                               ),
                             );
                           }).toList(),
@@ -349,19 +364,17 @@ class _FloatingButtonState extends State<FloatingButton> {
                           },
                         ),
                       ),
-
-                      // Camera icon - smaller
                       GestureDetector(
                         onTap: _captureScreen,
                         child: Container(
-                          width: 30, // Reduced size
-                          height: 30, // Reduced size
-                          padding: const EdgeInsets.all(4), // Reduced padding
+                          width: 30,
+                          height: 30,
+                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: Colors.grey[100],
                           ),
-                          child: const Icon(Icons.translate, size: 18), // Smaller icon
+                          child: const Icon(Icons.translate, size: 18),
                         ),
                       ),
                     ],

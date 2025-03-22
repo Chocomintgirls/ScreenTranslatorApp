@@ -3,7 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  const SettingsScreen({Key? key, required this.settingsNotifier}) : super(key: key);
+  final ValueNotifier<void> settingsNotifier; // เพิ่ม ValueNotifier
 
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
@@ -64,6 +65,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setString('selectedTranslationAPI', _selectedTranslationAPI);
     await prefs.setBool('autoTranslate', _autoTranslate);
     await prefs.setBool('showOriginalText', _showOriginalText);
+
+    widget.settingsNotifier.value = null;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Settings saved')),
