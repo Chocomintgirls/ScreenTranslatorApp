@@ -1,4 +1,3 @@
-// ไฟล์: android/app/src/main/kotlin/com/example/screentranslator/MainActivity.kt
 package com.example.screentranslator
 
 import android.content.BroadcastReceiver
@@ -131,7 +130,6 @@ class MainActivity: FlutterActivity() {
             if (resultCode == RESULT_OK && data != null && pendingScreenshotPath != null) {
                 try {
                     // ส่งเฉพาะ resultCode และ data ไปยัง Service
-                    // โดยไม่สร้าง MediaProjection ในที่นี้
                     val intent = Intent(this, ScreenCaptureService::class.java).apply {
                         action = ScreenCaptureService.ACTION_START
                         putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)

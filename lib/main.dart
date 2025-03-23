@@ -1,4 +1,3 @@
-// ไฟล์: main.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -7,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'WelcomeScreen.dart';
 import 'FloatingButton.dart';
-import 'ipc_service.dart'; // เพิ่ม import
+import 'ipc_service.dart';
 
 @pragma('vm:entry-point')
 void overlayMain() {
@@ -40,11 +39,9 @@ void main() {
   runApp(const MyApp());
 }
 
-// ฟังก์ชันถ่ายภาพหน้าจอเมื่อได้รับคำสั่งจาก overlay
 Future<void> _takeScreenshot() async {
   print("Main: Starting screenshot process");
   try {
-    // สร้างที่อยู่ไฟล์
     final directory = await getExternalStorageDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final imagePath = '${directory!.path}/screenshot_$timestamp.png';

@@ -37,7 +37,6 @@ class ScreenshotService {
   static Timer? _commandCheckTimer;
 
   /// ขอสิทธิ์ถ่ายภาพหน้าจอจากผู้ใช้ (จะแสดง Dialog)
-  /// ควรเรียกใช้เมื่อเริ่มต้นแอปเพื่อให้ผู้ใช้ให้สิทธิ์ก่อน
   static Future<bool> requestPermission() async {
     try {
       // ตรวจสอบว่ามีสิทธิ์อยู่แล้วหรือไม่
@@ -242,7 +241,6 @@ class ScreenshotService {
           return null;
         }
 
-        // รอสักครู่ก่อนเช็คใหม่
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (e) {
         print('Error waiting for result: $e');

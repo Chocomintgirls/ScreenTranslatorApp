@@ -15,7 +15,6 @@ import 'package:screentranslator/screenshot_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'TranslationService.dart';
 import 'ipc_service.dart';
-import 'screenshot_service.dart'; // Import the new service
 
 class FloatingButton extends StatefulWidget {
   const FloatingButton({Key? key}) : super(key: key);

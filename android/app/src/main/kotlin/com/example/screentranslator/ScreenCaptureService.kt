@@ -1,4 +1,3 @@
-// ไฟล์: android/app/src/main/kotlin/com/example/screentranslator/ScreenCaptureService.kt
 package com.example.screentranslator
 
 import android.app.Notification
@@ -247,7 +246,6 @@ class ScreenCaptureService : Service() {
                 sendFailureResult(path)
             }
 
-            // ทำความสะอาดและหยุดบริการ
             cleanup()
             stopSelf()
         }
