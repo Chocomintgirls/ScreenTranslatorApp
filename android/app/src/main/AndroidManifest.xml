@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Internet Permission -->
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -20,9 +21,10 @@
     <!-- For Android 10+ Screenshot capability -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <application
+        android:name=".MyApplication"
         android:label="screentranslator"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="ocr" />
@@ -49,16 +51,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Overlay Activity - ไม่มี category.LAUNCHER เพื่อป้องกันการแสดงในหน้า launcher -->
-<!--        <activity-->
-<!--            android:name="com.example.flutter_overlay_window.OverlayActivity"-->
-<!--            android:theme="@style/OverlayTheme"-->
-<!--            android:launchMode="singleInstance"-->
-<!--            android:hardwareAccelerated="true"-->
-<!--            android:exported="true">-->
-<!--            &lt;!&ndash; ลบ intent-filter ที่มี LAUNCHER &ndash;&gt;-->
-<!--        </activity>-->
-
         <!-- ส่วนสำคัญ: ระบุชื่อ entry point function -->
         <meta-data
             android:name="com.example.flutter_overlay_window.overlay_entry_point"
@@ -76,6 +68,11 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="explanation_for_special_use"/>
         </service>
+        <service
+            android:name=".ScreenCaptureService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"> </service>
 
     </application>
 

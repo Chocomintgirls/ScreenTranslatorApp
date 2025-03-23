@@ -11,8 +11,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:screentranslator/screenshot_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'TranslationService.dart';
+import 'ipc_service.dart';
+import 'screenshot_service.dart'; // Import the new service
 
 class FloatingButton extends StatefulWidget {
   const FloatingButton({Key? key}) : super(key: key);
@@ -31,6 +34,7 @@ class _FloatingButtonState extends State<FloatingButton> {
   String _targetLanguage = 'th';
   String _TranslateAPI = 'google';
   final screenshotController = ScreenshotController();
+  bool _hasScreenshotPermission = false; // New variable to track permission
 
   final Map<String, String> _languageOptions = {
     'th': 'Thai',
@@ -54,6 +58,18 @@ class _FloatingButtonState extends State<FloatingButton> {
     super.initState();
     _loadPreferences();
     _checkPermissions();
+
+    // Request screenshot permission at startup
+    _requestScreenshotPermission();
+  }
+
+  Future<void> _requestScreenshotPermission() async {
+    try {
+      _hasScreenshotPermission = await ScreenshotService.requestPermission();
+      print('Screenshot permission status: $_hasScreenshotPermission');
+    } catch (e) {
+      print('Error requesting screenshot permission: $e');
+    }
   }
 
   Future<void> _checkPermissions() async {
@@ -103,55 +119,40 @@ class _FloatingButtonState extends State<FloatingButton> {
     });
 
     try {
+      // ส่งคำสั่งถ่ายภาพหน้าจอไปยัง Main App
+      print("Overlay: Sending screenshot command");
+      await IPCService.sendCommand(IPCService.COMMAND_TAKE_SCREENSHOT);
+
+      // ปิด overlay ชั่วคราวเพื่อไม่ให้ปรากฏในภาพถ่าย
+      print("Overlay: Closing overlay window");
       await FlutterOverlayWindow.closeOverlay();
+
+      // รอสักครู่เพื่อให้ overlay หายไปจากหน้าจอจริงๆ
       await Future.delayed(const Duration(milliseconds: 500));
 
-      final screenshotBytes = await screenshotController.capture();
-      if (screenshotBytes != null) {
-        final extractedText = await TranslationService.extractText(
-          screenshotBytes,
-          ocrEngine: 'tesseract',
-        )?? '';
-        final directory = await getExternalStorageDirectory();
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final imagePath = '${directory!.path}/screenshot_$timestamp.png';
-        final file = File(imagePath);
-        await file.writeAsBytes(screenshotBytes);
-        print("Screenshot saved at: $imagePath");
+      // รอผลลัพธ์จาก Main App (timeout 15 วินาที)
+      print("Overlay: Waiting for screenshot result");
+      final screenshotPath = await IPCService.waitForResult(15);
 
-        print("capture");
-
-        setState(() {
-          _extractedText = extractedText;
-          _isCapturing = false;
-        });
-
-        if (_extractedText.isNotEmpty) {
-          final translatedText = await TranslationService.translateText(
-            _extractedText,
-            toLanguage: _targetLanguage,
-          );
-
-          setState(() {
-            _translatedText = translatedText;
-          });
-          print(_extractedText);
-        }
+      if (screenshotPath != null) {
+        print("Overlay: Screenshot saved at: $screenshotPath");
+        // ในอนาคตสามารถเพิ่มการประมวลผลภาพต่อได้ที่นี่
+        // เช่น สกัดข้อความและแปล
+      } else {
+        print("Overlay: Failed to take screenshot");
       }
     } catch (e) {
-      print('Error capturing screen: $e');
-      setState(() {
-        _extractedText = 'Error: $e';
-      });
+      print('Overlay: Error during screenshot process: $e');
     } finally {
-      // ตรวจสอบสถานะปัจจุบันก่อนเปิด Overlay ใหม่
+      // เปิด overlay อีกครั้ง
+      print("Overlay: Reopening overlay window");
       final overlayWidth = _showTranslateBar ? 320 : (_isExpanded ? 300 : 60);
       final overlayHeight = _showTranslateBar ? 60 : (_isExpanded ? 500 : 60);
 
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
         height: overlayHeight,
-        width: overlayWidth, // ใช้ขนาดตามสถานะปัจจุบัน
+        width: overlayWidth,
         flag: OverlayFlag.defaultFlag,
         visibility: NotificationVisibility.visibilityPublic,
         positionGravity: PositionGravity.auto,
@@ -194,21 +195,6 @@ class _FloatingButtonState extends State<FloatingButton> {
       print('Resize error: $e');
     }
   }
-
-  // Future<void> _resizeOverlay() async {
-  //   try {
-  //     if (_showTranslateBar) {
-  //       // Make sure we provide enough width for the translate bar to prevent overflow
-  //       await FlutterOverlayWindow.resizeOverlay(320, 60, true);
-  //     } else if (_isExpanded) {
-  //       await FlutterOverlayWindow.resizeOverlay(300, 500, true);
-  //     } else {
-  //       await FlutterOverlayWindow.resizeOverlay(60, 60, true);
-  //     }
-  //   } catch (e) {
-  //     print('Resize error: $e');
-  //   }
-  // }
 
   @override
   Widget build(BuildContext context) {
@@ -259,15 +245,6 @@ class _FloatingButtonState extends State<FloatingButton> {
       width: totalWidth,
       child: Stack(
         children: [
-          // Invisible full-screen touch area to detect outside taps
-          // Positioned.fill(
-          //   child: GestureDetector(
-          //     onTap: _toggleTranslateBar,
-          //     behavior: HitTestBehavior.translucent,
-          //     child: Container(color: Colors.transparent),
-          //   ),
-          // ),
-
           // The actual translate bar
           Positioned(
             bottom: 0,
@@ -277,116 +254,116 @@ class _FloatingButtonState extends State<FloatingButton> {
               mainAxisSize: MainAxisSize.min, // Do not stretch
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Close button
-                GestureDetector(
-                  onTap: _toggleTranslateBar,
-                  child: Container(
-                    width: closeButtonWidth,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3854AF),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 5,
-                          spreadRadius: 1,
-                        ),
-                      ],
+              // Close button
+              GestureDetector(
+              onTap: _toggleTranslateBar,
+              child: Container(
+                width: closeButtonWidth,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3854AF),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 5,
+                      spreadRadius: 1,
                     ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 30),
-                  ),
+                  ],
                 ),
+                child: const Icon(Icons.close, color: Colors.white, size: 30),
+              ),
+            ),
 
-                // White bar - with fixed width to prevent overflow
-                Container(
-                  width: whiteBarWidth,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(30),
-                      bottomRight: Radius.circular(30),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 5,
-                        spreadRadius: 1,
-                      ),
-                    ],
+            // White bar - with fixed width to prevent overflow
+            Container(
+              width: whiteBarWidth,
+              height: 60,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(30),
+                  bottomRight: Radius.circular(30),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 5,
+                    spreadRadius: 1,
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12), // Reduced padding
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min, // Do not stretch
-                    children: [
-                      // Language dropdown - with smaller max width
-                      Container(
-                        constraints: const BoxConstraints(maxWidth: 60),
-                        child: DropdownButton<String>(
-                          value: _targetLanguage,
-                          underline: Container(),
-                          isDense: true, // Make dropdown more compact
-                          iconSize: 16, // Smaller icon
-                          icon: const Icon(Icons.keyboard_arrow_down),
-                          items: _languageOptions.entries.map((entry) {
-                            return DropdownMenuItem<String>(
-                              value: entry.key,
-                              child: Text(
-                                entry.key.toUpperCase(),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12, // Smaller text
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _targetLanguage = value);
-                              _savePreferences();
-                            }
-                          },
-                        ),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12), // Reduced padding
+              child: Row(
+                  mainAxisSize: MainAxisSize.min, // Do not stretch
+                  children: [
+              // Language dropdown - with smaller max width
+              Container(
+              constraints: const BoxConstraints(maxWidth: 60),
+              child: DropdownButton<String>(
+                value: _targetLanguage,
+                underline: Container(),
+                isDense: true, // Make dropdown more compact
+                iconSize: 16, // Smaller icon
+                icon: const Icon(Icons.keyboard_arrow_down),
+                items: _languageOptions.entries.map((entry) {
+                  return DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(
+                      entry.key.toUpperCase(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12, // Smaller text
                       ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _targetLanguage = value);
+                    _savePreferences();
+                  }
+                },
+              ),
+            ),
 
-                      // Divider
-                      Container(
-                        height: 30,
-                        width: 1,
-                        color: Colors.grey[300],
-                        margin: const EdgeInsets.symmetric(horizontal: 4), // Reduced margin
-                      ),
+            // Divider
+            Container(
+              height: 30,
+              width: 1,
+              color: Colors.grey[300],
+              margin: const EdgeInsets.symmetric(horizontal: 4), // Reduced margin
+            ),
 
-                      // API Dropdown - more compact
-                      Expanded(
-                        child: DropdownButton<String>(
-                          value: _TranslateAPI,
-                          underline: Container(),
-                          isDense: true, // Make dropdown more compact
-                          iconSize: 16, // Smaller icon
-                          icon: const Icon(Icons.keyboard_arrow_down),
-                          items: _translationAPIOptions.entries.map((entry) {
-                            return DropdownMenuItem<String>(
-                              value: entry.key,
-                              child: Text(
-                                entry.key.toUpperCase(),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12, // Smaller text
-                                ),
-                                overflow: TextOverflow.ellipsis, // Handle text overflow
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _TranslateAPI = value);
-                              _savePreferences();
-                            }
-                          },
-                        ),
+            // API Dropdown - more compact
+            Expanded(
+              child: DropdownButton<String>(
+                value: _TranslateAPI,
+                underline: Container(),
+                isDense: true, // Make dropdown more compact
+                iconSize: 16, // Smaller icon
+                icon: const Icon(Icons.keyboard_arrow_down),
+                items: _translationAPIOptions.entries.map((entry) {
+                  return DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(
+                      entry.key.toUpperCase(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12, // Smaller text
                       ),
+                      overflow: TextOverflow.ellipsis, // Handle text overflow
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _TranslateAPI = value);
+                    _savePreferences();
+                  }
+                },
+              ),
+            ),
 
                       // Camera icon - smaller
                       GestureDetector(
