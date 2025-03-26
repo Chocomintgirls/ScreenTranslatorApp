@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'GradientBackground.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'FloatingButton.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'FloatingButton.dart';
+import 'GradientBackground.dart';
 import 'overlay_service.dart';
 import 'SettingsScreen.dart';
 
@@ -15,6 +16,33 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isTranslationEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestAndSaveScreenshotPermission();
+    // Other initialization code can remain here
+  }
+
+  // Method to request and save screenshot permission
+  Future<void> _requestAndSaveScreenshotPermission() async {
+    try {
+      final methodChannel = MethodChannel('com.yourapp.screenshot');
+      // First check if we already have permission
+      final hasPermission = await methodChannel.invokeMethod('checkScreenshotPermission');
+
+      if (!hasPermission) {
+        // Request permission if we don't have it
+        print("Requesting screenshot permission...");
+        final permissionGranted = await methodChannel.invokeMethod('requestScreenshotPermission');
+        print("Screenshot permission granted: $permissionGranted");
+      } else {
+        print("Screenshot permission already granted");
+      }
+    } catch (e) {
+      print('Error checking/requesting screenshot permission: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -107,6 +107,7 @@ class _FloatingButtonState extends State<FloatingButton> {
     }
   }
 
+// Updated captureScreen method with error handling for foreground service restrictions
   Future<void> _captureScreen() async {
     if (_isProcessing) return;
 
@@ -118,44 +119,79 @@ class _FloatingButtonState extends State<FloatingButton> {
     });
 
     try {
-      // ส่งคำสั่งถ่ายภาพหน้าจอไปยัง Main App
+      // Request notification permission for Android 13+ (required for foreground services)
+      if (Platform.isAndroid) {
+        // Check if we have POST_NOTIFICATIONS permission on Android 13+
+        if (int.parse(Platform.version.split('.')[0]) >= 13) {
+          var status = await Permission.notification.status;
+          if (!status.isGranted) {
+            status = await Permission.notification.request();
+            if (!status.isGranted) {
+              print("Notification permission denied. Foreground service may fail.");
+            }
+          }
+        }
+      }
+
+      // Send screenshot command to Main App
       print("Overlay: Sending screenshot command");
       await IPCService.sendCommand(IPCService.COMMAND_TAKE_SCREENSHOT);
 
-      // ปิด overlay ชั่วคราวเพื่อไม่ให้ปรากฏในภาพถ่าย
+      // Close overlay temporarily so it doesn't appear in the screenshot
       print("Overlay: Closing overlay window");
       await FlutterOverlayWindow.closeOverlay();
 
-      // รอสักครู่เพื่อให้ overlay หายไปจากหน้าจอจริงๆ
+      // Wait for overlay to disappear from screen
       await Future.delayed(const Duration(milliseconds: 500));
 
-      // รอผลลัพธ์จาก Main App (timeout 15 วินาที)
-      print("Overlay: Waiting for screenshot result");
-      final screenshotPath = await IPCService.waitForResult(15);
+      try {
+        // Wait for result from Main App (timeout 15 seconds)
+        print("Overlay: Waiting for screenshot result");
+        final screenshotPath = await IPCService.waitForResult(15);
 
-      if (screenshotPath != null) {
-        print("Overlay: Screenshot saved at: $screenshotPath");
-        // ในอนาคตสามารถเพิ่มการประมวลผลภาพต่อได้ที่นี่
-        // เช่น สกัดข้อความและแปล
-      } else {
-        print("Overlay: Failed to take screenshot");
+        if (screenshotPath != null) {
+          print("Overlay: Screenshot saved at: $screenshotPath");
+          // TODO: In the future, process the image here
+          // For example, extract text and translate
+        } else {
+          print("Overlay: Failed to take screenshot");
+        }
+      } catch (e) {
+        print("Overlay: Error waiting for screenshot: $e");
       }
     } catch (e) {
       print('Overlay: Error during screenshot process: $e');
     } finally {
-      // เปิด overlay อีกครั้ง
-      print("Overlay: Reopening overlay window");
-      final overlayWidth = _showTranslateBar ? 320 : (_isExpanded ? 300 : 60);
-      final overlayHeight = _showTranslateBar ? 60 : (_isExpanded ? 500 : 60);
+      try {
+        // Reopen overlay
+        print("Overlay: Reopening overlay window");
+        final overlayWidth = _showTranslateBar ? 320 : (_isExpanded ? 300 : 60);
+        final overlayHeight = _showTranslateBar ? 60 : (_isExpanded ? 500 : 60);
 
-      await FlutterOverlayWindow.showOverlay(
-        enableDrag: true,
-        height: overlayHeight,
-        width: overlayWidth,
-        flag: OverlayFlag.defaultFlag,
-        visibility: NotificationVisibility.visibilityPublic,
-        positionGravity: PositionGravity.auto,
-      );
+        await FlutterOverlayWindow.showOverlay(
+          enableDrag: true,
+          height: overlayHeight,
+          width: overlayWidth,
+          flag: OverlayFlag.defaultFlag,
+          visibility: NotificationVisibility.visibilityPublic,
+          positionGravity: PositionGravity.auto,
+        );
+      } catch (e) {
+        print("Overlay: Error reopening overlay: $e");
+        // Try fallback method if showing overlay fails
+        try {
+          await FlutterOverlayWindow.showOverlay(
+            enableDrag: true,
+            height: 60,
+            width: 60,
+            flag: OverlayFlag.defaultFlag,
+            visibility: NotificationVisibility.visibilityPublic,
+            positionGravity: PositionGravity.auto,
+          );
+        } catch (fallbackError) {
+          print("Overlay: Fallback also failed: $fallbackError");
+        }
+      }
 
       if (mounted) {
         setState(() {

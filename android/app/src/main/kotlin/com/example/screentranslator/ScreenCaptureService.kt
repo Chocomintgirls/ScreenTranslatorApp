@@ -27,16 +27,18 @@ class ScreenCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
+    private var shouldUseAppProjection = false
 
     companion object {
         private const val TAG = "ScreenCaptureService"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_DATA = "data"
         const val EXTRA_PATH = "path"
+        const val EXTRA_USE_APP_PROJECTION = "use_app_projection"
         const val ACTION_START = "start"
         const val ACTION_STOP = "stop"
 
-        // สำหรับส่งผลลัพธ์กลับไปยัง MainActivity
+        // For sending results back to MainActivity
         const val ACTION_SCREENSHOT_RESULT = "screenshot_result"
         const val EXTRA_SUCCESS = "success"
     }
@@ -52,7 +54,7 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("onStartCommand", "Service started")
+        Log.d(TAG, "Service started with intent: ${intent?.action}")
 
         if (intent == null) {
             stopSelf()
@@ -61,23 +63,64 @@ class ScreenCaptureService : Service() {
 
         when (intent.action) {
             ACTION_START -> {
-                val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
+                val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0) // Changed default from -1 to 0
                 val data = intent.getParcelableExtra<Intent>(EXTRA_DATA)
                 val path = intent.getStringExtra(EXTRA_PATH)
+                shouldUseAppProjection = intent.getBooleanExtra(EXTRA_USE_APP_PROJECTION, false)
 
-                Log.d(TAG, "Action START received: resultCode=$resultCode, data=$data, path=$path")
+                Log.d(TAG, "Action START received: resultCode=$resultCode, data=$data, path=$path, useAppProjection=$shouldUseAppProjection")
 
-                if (data != null && path != null) {
+                if (path != null) {
                     try {
-                        startCapture(resultCode, data, path)
+                        // We no longer use the Application's stored MediaProjection
+                        // Instead, we create a new one here in the service
+                        if (shouldUseAppProjection && MyApplication.hasProjectionCredentials()) {
+                            // Get the stored credentials and create a projection here
+                            Log.d(TAG, "Using application's stored credentials")
+                            val projManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                            val storedCode = MyApplication.resultCode
+                            val storedData = MyApplication.resultData
+
+                            // FIXED: In Android, RESULT_OK is -1, so we need to check for -1 specifically
+                            Log.d(TAG, "Stored credentials: code=$storedCode, data=${storedData != null}")
+                            if (storedCode == -1 && storedData != null) { // RESULT_OK is -1
+                                try {
+                                    mediaProjection = projManager.getMediaProjection(storedCode, storedData)
+                                    if (mediaProjection != null) {
+                                        Log.d(TAG, "Successfully created MediaProjection in service")
+                                        setupImageReaderAndVirtualDisplay(path)
+                                    } else {
+                                        Log.e(TAG, "Failed to create MediaProjection in service")
+                                        sendFailureResult(path)
+                                        stopSelf()
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error creating projection from credentials", e)
+                                    sendFailureResult(path)
+                                    stopSelf()
+                                }
+                            } else {
+                                Log.e(TAG, "Invalid stored credentials: code=$storedCode, data=${storedData != null}")
+                                sendFailureResult(path)
+                                stopSelf()
+                            }
+                        } else if (resultCode == -1 && data != null) { // RESULT_OK is -1
+                            // Use the projection from intent
+                            Log.d(TAG, "Using projection from intent")
+                            startCapture(resultCode, data, path)
+                        } else {
+                            Log.e(TAG, "No valid projection available: resultCode=$resultCode, data=${data != null}")
+                            sendFailureResult(path)
+                            stopSelf()
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error starting capture", e)
                         sendFailureResult(path)
                         stopSelf()
                     }
                 } else {
-                    Log.e(TAG, "Invalid parameters for startCapture")
-                    sendFailureResult(path ?: "unknown")
+                    Log.e(TAG, "Invalid path parameter")
+                    sendFailureResult("unknown")
                     stopSelf()
                 }
             }
@@ -95,7 +138,7 @@ class ScreenCaptureService : Service() {
     }
 
     private fun startForeground() {
-        // สร้าง Notification Channel (จำเป็นสำหรับ Android 8+)
+        // Create Notification Channel (required for Android 8+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -109,7 +152,7 @@ class ScreenCaptureService : Service() {
             Log.d(TAG, "Notification channel created")
         }
 
-        // สร้าง Notification
+        // Create Notification
         val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -121,13 +164,37 @@ class ScreenCaptureService : Service() {
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .build()
 
-        // เริ่ม Foreground Service
+        // Start Foreground Service
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
             Log.d(TAG, "Service started in foreground with MEDIA_PROJECTION type")
         } else {
             startForeground(NOTIFICATION_ID, notification)
             Log.d(TAG, "Service started in foreground")
+        }
+    }
+
+    private fun sendSuccessResult(path: String) {
+        try {
+            val resultIntent = Intent(ACTION_SCREENSHOT_RESULT)
+            resultIntent.putExtra(EXTRA_SUCCESS, true)
+            resultIntent.putExtra(EXTRA_PATH, path)
+            sendBroadcast(resultIntent)
+            Log.d(TAG, "Sent success broadcast: path=$path")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending success broadcast", e)
+        }
+    }
+
+    private fun sendFailureResult(path: String) {
+        try {
+            val resultIntent = Intent(ACTION_SCREENSHOT_RESULT)
+            resultIntent.putExtra(EXTRA_SUCCESS, false)
+            resultIntent.putExtra(EXTRA_PATH, path)
+            sendBroadcast(resultIntent)
+            Log.d(TAG, "Sent failure broadcast: path=$path")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending failure broadcast", e)
         }
     }
 
@@ -143,7 +210,18 @@ class ScreenCaptureService : Service() {
                 return
             }
 
-            // ลงทะเบียน callback ก่อนเรียกใช้ createVirtualDisplay
+            // Continue with capture process
+            setupImageReaderAndVirtualDisplay(path)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting capture", e)
+            sendFailureResult(path)
+            stopSelf()
+        }
+    }
+
+    private fun setupImageReaderAndVirtualDisplay(path: String) {
+        try {
+            // Register callback
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {  // Android 11+
                 mediaProjection?.registerCallback(object : MediaProjection.Callback() {
                     override fun onStop() {
@@ -177,18 +255,19 @@ class ScreenCaptureService : Service() {
 
             Log.d(TAG, "Virtual display created, waiting for image...")
 
-            // รอสักครู่เพื่อให้ภาพพร้อม
+            // Wait a moment for the image to be ready
             Handler(Looper.getMainLooper()).postDelayed({
                 captureScreenshot(path)
             }, 500)
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting capture", e)
+            Log.e(TAG, "Error setting up capture", e)
             sendFailureResult(path)
             stopSelf()
         }
     }
 
     private fun captureScreenshot(path: String) {
+        Log.d(TAG, "Starting screenshot capture")
         var success = false
 
         try {
@@ -210,7 +289,7 @@ class ScreenCaptureService : Service() {
 
                 try {
                     val file = File(path)
-                    // ตรวจสอบว่าโฟลเดอร์แม่มีอยู่หรือไม่ถ้าไม่ให้สร้างขึ้น
+                    // Check if parent folder exists, create it if not
                     val parent = file.parentFile
                     if (parent != null && !parent.exists()) {
                         parent.mkdirs()
@@ -239,7 +318,7 @@ class ScreenCaptureService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Error during screen capture", e)
         } finally {
-            // ส่ง Broadcast เพื่อแจ้งผลลัพธ์
+            // Send broadcast with result
             if (success) {
                 sendSuccessResult(path)
             } else {
@@ -251,35 +330,12 @@ class ScreenCaptureService : Service() {
         }
     }
 
-    private fun sendSuccessResult(path: String) {
-        try {
-            val resultIntent = Intent(ACTION_SCREENSHOT_RESULT)
-            resultIntent.putExtra(EXTRA_SUCCESS, true)
-            resultIntent.putExtra(EXTRA_PATH, path)
-            sendBroadcast(resultIntent)
-            Log.d(TAG, "Sent success broadcast: path=$path")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending success broadcast", e)
-        }
-    }
-
-    private fun sendFailureResult(path: String) {
-        try {
-            val resultIntent = Intent(ACTION_SCREENSHOT_RESULT)
-            resultIntent.putExtra(EXTRA_SUCCESS, false)
-            resultIntent.putExtra(EXTRA_PATH, path)
-            sendBroadcast(resultIntent)
-            Log.d(TAG, "Sent failure broadcast: path=$path")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending failure broadcast", e)
-        }
-    }
-
     private fun cleanup() {
         try {
             virtualDisplay?.release()
             imageReader?.close()
             mediaProjection?.stop()
+
             Log.d(TAG, "Resources cleaned up")
         } catch (e: Exception) {
             Log.e(TAG, "Error during cleanup", e)

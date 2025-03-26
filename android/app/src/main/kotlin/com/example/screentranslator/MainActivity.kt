@@ -18,6 +18,7 @@ class MainActivity: FlutterActivity() {
 
     private var screenshotResult: MethodChannel.Result? = null
     private var pendingScreenshotPath: String? = null
+    private var pendingRequestType: String? = null  // Track what type of request we're processing
 
     private val TAG = "MainActivity"
 
@@ -38,7 +39,7 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // ลงทะเบียน BroadcastReceiver ให้ถูกต้องตามเวอร์ชัน Android
+        // Register BroadcastReceiver
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(
@@ -54,14 +55,18 @@ class MainActivity: FlutterActivity() {
             Log.e(TAG, "Error registering BroadcastReceiver", e)
         }
 
-        // ลงทะเบียน MethodChannel
+        // Register MethodChannel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "checkScreenshotPermission" -> {
-                    result.success(false) // จะขออนุญาตทุกครั้งที่ถ่ายภาพ
+                    // Check if we already have the permission saved
+                    val hasPermission = MyApplication.hasProjectionCredentials()
+                    Log.d(TAG, "Checking screenshot permission: $hasPermission")
+                    result.success(hasPermission)
                 }
                 "requestScreenshotPermission" -> {
                     try {
+                        pendingRequestType = "permission_only"
                         val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                         startActivityForResult(
                             mediaProjectionManager.createScreenCaptureIntent(),
@@ -79,14 +84,23 @@ class MainActivity: FlutterActivity() {
                     if (path != null) {
                         try {
                             pendingScreenshotPath = path
-                            screenshotResult = result
+                            pendingRequestType = "take_screenshot"
 
-                            val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                            startActivityForResult(
-                                mediaProjectionManager.createScreenCaptureIntent(),
-                                REQUEST_MEDIA_PROJECTION
-                            )
-                            Log.d(TAG, "Requesting screenshot for path: $path")
+                            // Check if we already have permission
+                            if (MyApplication.hasProjectionCredentials()) {
+                                Log.d(TAG, "Using existing permission to take screenshot")
+                                startScreenshotServiceWithExistingPermission(path)
+                                result.success(true)
+                            } else {
+                                // Need to request permission first
+                                screenshotResult = result
+                                val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                                startActivityForResult(
+                                    mediaProjectionManager.createScreenCaptureIntent(),
+                                    REQUEST_MEDIA_PROJECTION
+                                )
+                                Log.d(TAG, "Requesting new permission for screenshot: $path")
+                            }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error requesting screenshot", e)
                             result.error("SCREENSHOT_ERROR", e.message, null)
@@ -100,14 +114,23 @@ class MainActivity: FlutterActivity() {
                     if (path != null) {
                         try {
                             pendingScreenshotPath = path
-                            screenshotResult = result
+                            pendingRequestType = "start_service"
 
-                            val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                            startActivityForResult(
-                                mediaProjectionManager.createScreenCaptureIntent(),
-                                REQUEST_MEDIA_PROJECTION
-                            )
-                            Log.d(TAG, "Requesting screenshot service for path: $path")
+                            // Check if we already have permission
+                            if (MyApplication.hasProjectionCredentials()) {
+                                Log.d(TAG, "Using existing permission to start screenshot service")
+                                startScreenshotServiceWithExistingPermission(path)
+                                result.success(true)
+                            } else {
+                                // Need to request permission first
+                                screenshotResult = result
+                                val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                                startActivityForResult(
+                                    mediaProjectionManager.createScreenCaptureIntent(),
+                                    REQUEST_MEDIA_PROJECTION
+                                )
+                                Log.d(TAG, "Requesting new permission for screenshot service: $path")
+                            }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error starting screenshot service", e)
                             result.error("SERVICE_ERROR", e.message, null)
@@ -121,43 +144,79 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    // Helper function to start screenshot service using existing permission
+    private fun startScreenshotServiceWithExistingPermission(path: String) {
+        if (!MyApplication.hasProjectionCredentials()) {
+            Log.e(TAG, "No existing permission available")
+            return
+        }
+
+        try {
+            val intent = Intent(this, ScreenCaptureService::class.java).apply {
+                action = ScreenCaptureService.ACTION_START
+                putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, MyApplication.resultCode)
+                putExtra(ScreenCaptureService.EXTRA_DATA, MyApplication.resultData)
+                putExtra(ScreenCaptureService.EXTRA_PATH, path)
+                putExtra(ScreenCaptureService.EXTRA_USE_APP_PROJECTION, true)
+            }
+
+            Log.d(TAG, "Starting service with existing permission for path: $path")
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting service with existing permission", e)
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        Log.d(TAG, "onActivityResult: requestCode=$requestCode, resultCode=$resultCode")
+        Log.d(TAG, "onActivityResult: requestCode=$requestCode, resultCode=$resultCode, pendingRequestType=$pendingRequestType")
 
         if (requestCode == REQUEST_MEDIA_PROJECTION) {
-            if (resultCode == RESULT_OK && data != null && pendingScreenshotPath != null) {
+            // IMPORTANT: In Android, RESULT_OK is -1, so check for it correctly
+            if (resultCode == RESULT_OK && data != null) {
                 try {
-                    // ส่งเฉพาะ resultCode และ data ไปยัง Service
-                    val intent = Intent(this, ScreenCaptureService::class.java).apply {
-                        action = ScreenCaptureService.ACTION_START
-                        putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
-                        putExtra(ScreenCaptureService.EXTRA_DATA, data)  // ส่ง data โดยตรง
-                        putExtra(ScreenCaptureService.EXTRA_PATH, pendingScreenshotPath)
+                    // Log details for debugging
+                    Log.d(TAG, "Permission granted, saving credentials")
+
+                    // Save the permission for future use - no longer trying to initialize MediaProjection
+                    MyApplication.saveProjectionCredentials(resultCode, data)
+                    Log.d(TAG, "Credentials saved, hasProjection=${MyApplication.hasProjectionCredentials()}")
+
+                    // Handle different request types
+                    when (pendingRequestType) {
+                        "permission_only" -> {
+                            // Just getting permission, nothing else to do
+                            Log.d(TAG, "Permission granted successfully")
+                            screenshotResult?.success(true)
+                        }
+                        "take_screenshot", "start_service" -> {
+                            if (pendingScreenshotPath != null) {
+                                // Start the service to take screenshot
+                                Log.d(TAG, "Starting screenshot service after permission granted")
+                                startScreenshotServiceWithExistingPermission(pendingScreenshotPath!!)
+                                screenshotResult?.success(true)
+                            }
+                        }
                     }
-
-                    Log.d(TAG, "Starting service to take screenshot at path: $pendingScreenshotPath")
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(intent)  // ใช้ startForegroundService สำหรับ Android 8+
-                    } else {
-                        startService(intent)
-                    }
-
-                    screenshotResult?.success(true)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error starting service", e)
-                    screenshotResult?.error("SERVICE_ERROR", e.message, null)
+                    Log.e(TAG, "Error in permission handling", e)
+                    screenshotResult?.error("PERMISSION_ERROR", e.message, null)
                 }
             } else {
-                // ผู้ใช้ปฏิเสธการให้สิทธิ์หรือมีข้อผิดพลาด
-                Log.d(TAG, "Permission denied or error: resultCode=$resultCode, data=$data")
+                // User denied permission or there was an error
+                Log.d(TAG, "Permission denied or error: resultCode=$resultCode")
                 screenshotResult?.success(false)
             }
 
             screenshotResult = null
             pendingScreenshotPath = null
+            pendingRequestType = null
         }
     }
 
