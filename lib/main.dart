@@ -130,27 +130,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     });
   }
 
-  static Future<String> extractText(Uint8List imageBytes, {required String ocrEngine}) async {
-    final tempDir = await getTemporaryDirectory();
-    final tempPath = '${tempDir.path}/temp_ocr_image.jpg';
-    await File(tempPath).writeAsBytes(imageBytes);
-
-    if (ocrEngine == 'mlkit') {
-      final inputImage = InputImage.fromFilePath(tempPath);
-      final textRecognizer = TextRecognizer();
-      final recognizedText = await textRecognizer.processImage(inputImage);
-      textRecognizer.close();
-      return recognizedText.text;
-    } else {
-      final extractedText = await FlutterTesseractOcr.extractText(
-        tempPath,
-        language: 'eng',
-        args: {"psm": "4", "preserve_interword_spaces": "1"},
-      );
-      return extractedText;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -181,7 +160,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               value: selectedTranslationAPI,
               items: [
                 DropdownMenuItem(value: "google", child: Text("Google Translate")),
-                DropdownMenuItem(value: "gpt4o", child: Text("GPT-4o Mini")),
+                DropdownMenuItem(value: "gpt4omini", child: Text("GPT-4o Mini")),
+                DropdownMenuItem(value: "gemini", child: Text("Gemini 2.0 Flash")),
               ],
               onChanged: (value) {
                 setState(() {
@@ -195,7 +175,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               value: selectedTargetLanguage,
               items: [
                 DropdownMenuItem(value: "th", child: Text("แปลเป็นภาษาไทย")),
-                DropdownMenuItem(value: "en", child: Text("แปลเป็นภาษาอังกฤษ")),
+                DropdownMenuItem(value: "eng", child: Text("แปลเป็นภาษาอังกฤษ")),
               ],
               onChanged: (value) {
                 setState(() {

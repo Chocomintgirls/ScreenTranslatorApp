@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
@@ -27,7 +28,7 @@ class TranslationService {
       } else {
         return await FlutterTesseractOcr.extractText(
           tempPath,
-          language: 'tha', // ใช้ภาษาไทยเป็นค่าเริ่มต้น
+          language: "eng+tha+chi_sim+chi_tra+kor+fra+deu+por+jpn", // ใช้ภาษาไทยเป็นค่าเริ่มต้น
           args: {"tessdata": "assets/tessdata/","psm": "6", "preserve_interword_spaces": "1", "oem": "3"},
         );
       }
@@ -59,6 +60,9 @@ class TranslationService {
         case 'gpt4omini':
           translatedText = await _translateWithGPT4omini(text, toLanguage);
           break;
+        case 'gemini':
+          translatedText = await _translateWithGemini(text, toLanguage);
+          break;
         default:
           translatedText = await _translateWithGoogle(text, toLanguage);
       }
@@ -75,16 +79,47 @@ class TranslationService {
     final translator = GoogleTranslator();
     String translateText = "";
 
-    // ใช้ await เพื่อรอผลลัพธ์จากการแปล
-    var translated = await translator.translate(text, to: toLanguage);
-    translateText = translated.text;
-    
+    try {
+      // ตรวจสอบว่ามีภาษาผสมกันหรือไม่ และจัดการตามความเหมาะสม
+      // หากมีภาษาผสมกัน ให้แบ่งข้อความเป็นส่วน ๆ และแปลแต่ละส่วนแยกกัน
+      // หรือระบุภาษาต้นทางให้ชัดเจน
+      var translated = await translator.translate(text, to: toLanguage);
+      translateText = translated.text;
+    } catch (e) {
+      print('Translation Error: $e');
+      return 'Error translating text: $e';
+    }
+
     return translateText;
   }
+  
 
+  static Future<String> _translateWithGemini(String text, String toLanguage) async {
+    const apiKey = 'AIzaSyDwBMED4tDbyG18wLcITg3kMCMV6OHFBwE'; // แทนที่ด้วย API key ของคุณ
+    final model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: apiKey);
+    if(toLanguage == 'th'){
+      toLanguage = 'thai';
+    }
+
+    try {
+      final prompt = 'Translate $text to $toLanguage and provide only the translation without any explanation.';
+      final result = await model.generateContent([Content.text(prompt)]);
+      final translatedText = result.text;
+      print('target language GEMINI: $toLanguage\n Text gemini : $text');
+
+      if (translatedText != null && translatedText.isNotEmpty) {
+        return translatedText.trim();
+      } else {
+        return "[$toLanguage] $text (Gemini Translation Failed)";
+      }
+    } catch (e) {
+      print('Gemini Translation API Error: $e');
+      return "[$toLanguage] $text (Gemini Translation Failed)";
+    }
+  }
 
   static Future<String> _translateWithGPT4omini(String text, String toLanguage) async {
-    const apiKey = 'YOUR_GPT4O_API_KEY';
+    const apiKey = 'chat_API';  // Replace with your actual OpenAI API key (stored securely)
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
 
     try {
@@ -95,23 +130,30 @@ class TranslationService {
           'Authorization': 'Bearer $apiKey',
         },
         body: jsonEncode({
-          "model": "gpt-4o",
+          "model": "gpt-4o-mini",
           "messages": [
             {"role": "system", "content": "You are a helpful translator."},
-            {"role": "user", "content": "Translate to $toLanguage: $text"}
+            {"role": "user", "content": "Translate \"$text\" to $toLanguage."}
           ]
         }),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return data['choices'][0]['message']['content'].trim();
+
+        // Ensure the correct data is returned from the response
+        if (data['choices'] != null && data['choices'].isNotEmpty) {
+          return data['choices'][0]['message']['content'].trim();
+        } else {
+          return "Translation failed: No response from GPT-4o Mini.";
+        }
       } else {
-        return "[$toLanguage] $text (GPT-4o Translated)";
+        return "Error: Unable to translate [$text] to $toLanguage. Status: ${response.statusCode}.";
       }
     } catch (e) {
-      print('GPT-4o Translation API Error: $e');
-      return "[$toLanguage] $text (GPT-4o Translated)";
+      print('GPT-4o Mini Translation API Error: $e');
+      return "Error: Translation failed for [$text] to $toLanguage.";
     }
   }
 }
+
