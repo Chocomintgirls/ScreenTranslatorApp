@@ -25,7 +25,6 @@ class TranslationService {
 
         final inputImage = InputImage.fromFilePath(tempPath);
         final textRecognizer = TextRecognizer();
-
         final recognizedText = await textRecognizer.processImage(inputImage);
         textRecognizer.close();
 
@@ -38,10 +37,12 @@ class TranslationService {
 
         final extractedText = await FlutterTesseractOcr.extractText(
           tempPath,
-          language: 'eng', // You might need to adjust this based on expected language
+          language: 'tha', // You might need to adjust this based on expected language
           args: {
-            "psm": "4", // Assume single column of text
+            "tessdata": "assets/tessdata/tha.traineddata",
+            "psm": "6", // Assume single column of text
             "preserve_interword_spaces": "1",
+            "oem" : "3"
           },
         );
 
