@@ -15,6 +15,7 @@ import 'package:screentranslator/screenshot_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'TranslationService.dart';
 import 'ipc_service.dart';
+import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
 
 class FloatingButton extends StatefulWidget {
   const FloatingButton({Key? key}) : super(key: key);
@@ -108,6 +109,7 @@ class _FloatingButtonState extends State<FloatingButton> {
   }
 
 // Updated captureScreen method with error handling for foreground service restrictions
+
   Future<void> _captureScreen() async {
     if (_isProcessing) return;
 
@@ -119,51 +121,61 @@ class _FloatingButtonState extends State<FloatingButton> {
     });
 
     try {
-      // Request notification permission for Android 13+ (required for foreground services)
-      if (Platform.isAndroid) {
-        // Check if we have POST_NOTIFICATIONS permission on Android 13+
-        if (int.parse(Platform.version.split('.')[0]) >= 13) {
-          var status = await Permission.notification.status;
-          if (!status.isGranted) {
-            status = await Permission.notification.request();
-            if (!status.isGranted) {
-              print("Notification permission denied. Foreground service may fail.");
-            }
-          }
-        }
-      }
-
-      // Send screenshot command to Main App
       print("Overlay: Sending screenshot command");
       await IPCService.sendCommand(IPCService.COMMAND_TAKE_SCREENSHOT);
 
-      // Close overlay temporarily so it doesn't appear in the screenshot
       print("Overlay: Closing overlay window");
       await FlutterOverlayWindow.closeOverlay();
-
-      // Wait for overlay to disappear from screen
       await Future.delayed(const Duration(milliseconds: 500));
 
       try {
-        // Wait for result from Main App (timeout 15 seconds)
         print("Overlay: Waiting for screenshot result");
         final screenshotPath = await IPCService.waitForResult(15);
 
-        if (screenshotPath != null) {
-          print("Overlay: Screenshot saved at: $screenshotPath");
-          // TODO: In the future, process the image here
-          // For example, extract text and translate
-        } else {
-          print("Overlay: Failed to take screenshot");
+        if (screenshotPath == null || screenshotPath.isEmpty) {
+          print("Overlay: Screenshot path is null or empty.");
+          return;
+        }
+
+        final file = File(screenshotPath);
+        if (!await file.exists()) {
+          print("Overlay: Screenshot file does not exist.");
+          return;
+        }
+
+        print("Overlay: Screenshot saved at: $screenshotPath");
+
+        // ดึงข้อความจากภาพ
+        final extractedText = await FlutterTesseractOcr.extractText(
+          screenshotPath,
+          language: "eng+tha+chi_sim+chi_tra+kor+fra+deu+por+jpn",
+          args: {
+            "preserve_interword_spaces": "1",
+            "psm": "3",
+            "oem": "3"
+          },
+        );
+
+
+        if (extractedText == null || extractedText.isEmpty) {
+          print("Overlay: OCR did not extract any text.");
+          return;
+        }
+
+        print("Overlay: Extracted Text: \n$extractedText");
+
+        if (mounted) {
+          setState(() {
+            _extractedText = extractedText;
+          });
         }
       } catch (e) {
-        print("Overlay: Error waiting for screenshot: $e");
+        print("Overlay: Error processing image with Tesseract OCR: $e");
       }
     } catch (e) {
       print('Overlay: Error during screenshot process: $e');
     } finally {
       try {
-        // Reopen overlay
         print("Overlay: Reopening overlay window");
         final overlayWidth = _showTranslateBar ? 320 : (_isExpanded ? 300 : 60);
         final overlayHeight = _showTranslateBar ? 60 : (_isExpanded ? 500 : 60);
@@ -178,7 +190,6 @@ class _FloatingButtonState extends State<FloatingButton> {
         );
       } catch (e) {
         print("Overlay: Error reopening overlay: $e");
-        // Try fallback method if showing overlay fails
         try {
           await FlutterOverlayWindow.showOverlay(
             enableDrag: true,

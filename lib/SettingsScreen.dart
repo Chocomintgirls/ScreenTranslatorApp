@@ -130,7 +130,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 16),
             _buildSettingSection(
-              'OCR Settings',
+              'OCR',
               [
                 _buildDropdownSetting(
                   'OCR Engine',
@@ -142,32 +142,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       (value) {
                     setState(() {
                       _selectedOCREngine = value!;
-                    });
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildSettingSection(
-              'Behavior Settings',
-              [
-                _buildSwitchSetting(
-                  'Auto Translate',
-                  'Automatically translate text after OCR',
-                  _autoTranslate,
-                      (value) {
-                    setState(() {
-                      _autoTranslate = value;
-                    });
-                  },
-                ),
-                _buildSwitchSetting(
-                  'Show Original Text',
-                  'Display original text alongside translation',
-                  _showOriginalText,
-                      (value) {
-                    setState(() {
-                      _showOriginalText = value;
                     });
                   },
                 ),
