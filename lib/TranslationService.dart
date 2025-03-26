@@ -95,7 +95,7 @@ class TranslationService {
   
 
   static Future<String> _translateWithGemini(String text, String toLanguage) async {
-    const apiKey = 'AIzaSyDwBMED4tDbyG18wLcITg3kMCMV6OHFBwE'; // แทนที่ด้วย API key ของคุณ
+    const apiKey = 'gg_api'; // แทนที่ด้วย API key ของคุณ
     final model = GenerativeModel(model: 'gemini-2.0-flash', apiKey: apiKey);
     if(toLanguage == 'th'){
       toLanguage = 'thai';
