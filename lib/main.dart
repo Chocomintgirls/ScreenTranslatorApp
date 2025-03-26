@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
+import 'package:screentranslator/TranslationService.dart';
 
 import 'FloatingButton.dart';
 
@@ -95,6 +96,9 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
   String extractedText = "กดปุ่มด้านล่างเพื่อสแกนข้อความ";
+  String translatedText = "แปลข้อความจะปรากฏที่นี่";
+  String selectedTranslationAPI = "google"; // ค่าเริ่มต้นเป็น Google Translate
+  String selectedTargetLanguage = "th"; // ค่าเริ่มต้นเป็นภาษาไทย
 
   Future<void> pickImageAndExtractText(String ocrEngine) async {
     final picker = ImagePicker();
@@ -103,10 +107,26 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     if (pickedFile == null) return;
 
     final imageBytes = await File(pickedFile.path).readAsBytes();
-    final text = await extractText(Uint8List.fromList(imageBytes), ocrEngine: ocrEngine);
+    final text = await TranslationService.extractText(Uint8List.fromList(imageBytes), ocrEngine: ocrEngine);
 
     setState(() {
       extractedText = text;
+    });
+  }
+
+  Future<void> translateExtractedText() async {
+    if (extractedText.isEmpty || extractedText == "กดปุ่มด้านล่างเพื่อสแกนข้อความ") {
+      return;
+    }
+
+    String translated = await TranslationService.translateText(
+      extractedText,
+      toLanguage: selectedTargetLanguage,
+      translationAPI: selectedTranslationAPI,
+    );
+
+    setState(() {
+      translatedText = translated;
     });
   }
 
@@ -123,7 +143,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       return recognizedText.text;
     } else {
       final extractedText = await FlutterTesseractOcr.extractText(
-        tempPath, language: 'eng',
+        tempPath,
+        language: 'eng',
         args: {"psm": "4", "preserve_interword_spaces": "1"},
       );
       return extractedText;
@@ -133,13 +154,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("OCR Test")),
+      appBar: AppBar(title: Text("OCR และแปลภาษา")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(extractedText, textAlign: TextAlign.center, style: TextStyle(fontSize: 18)),
+            Text(
+              extractedText,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18),
+            ),
             SizedBox(height: 20),
             ElevatedButton(
               onPressed: () => pickImageAndExtractText('mlkit'),
@@ -148,6 +173,47 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ElevatedButton(
               onPressed: () => pickImageAndExtractText('tesseract'),
               child: Text("ทดสอบ Tesseract OCR"),
+            ),
+            SizedBox(height: 20),
+
+            // Dropdown สำหรับเลือก API แปลภาษา
+            DropdownButton<String>(
+              value: selectedTranslationAPI,
+              items: [
+                DropdownMenuItem(value: "google", child: Text("Google Translate")),
+                DropdownMenuItem(value: "gpt4o", child: Text("GPT-4o Mini")),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  selectedTranslationAPI = value!;
+                });
+              },
+            ),
+
+            // Dropdown สำหรับเลือกภาษาปลายทาง
+            DropdownButton<String>(
+              value: selectedTargetLanguage,
+              items: [
+                DropdownMenuItem(value: "th", child: Text("แปลเป็นภาษาไทย")),
+                DropdownMenuItem(value: "en", child: Text("แปลเป็นภาษาอังกฤษ")),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  selectedTargetLanguage = value!;
+                });
+              },
+            ),
+
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: translateExtractedText,
+              child: Text("แปลข้อความ"),
+            ),
+            SizedBox(height: 20),
+            Text(
+              translatedText,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, color: Colors.blueAccent),
             ),
           ],
         ),
