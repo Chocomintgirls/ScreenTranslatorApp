@@ -13,7 +13,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _defaultTargetLanguage = 'th';
   String _selectedOCREngine = 'tesseract';
   String _selectedTranslationAPI = 'google';
-  bool _autoTranslate = true;
+  // bool _autoTranslate = true;
   bool _showOriginalText = true;
 
   final List<Map<String, String>> _languageOptions = [
@@ -25,19 +25,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     {'code': 'fr', 'name': 'French'},
     {'code': 'de', 'name': 'German'},
     {'code': 'es', 'name': 'Spanish'},
-    {'code': 'ru', 'name': 'Russian'},
-    {'code': 'vi', 'name': 'Vietnamese'},
+    {'code': 'por','name': 'Portuguese'},
   ];
 
   final List<Map<String, String>> _ocrEngineOptions = [
     {'value': 'tesseract', 'name': 'Tesseract OCR'},
-    {'value': 'mlkit', 'name': 'Google ML Kit'},
   ];
 
   final List<Map<String, String>> _translationAPIOptions = [
     {'value': 'google', 'name': 'Google Translate'},
-    {'value': 'microsoft', 'name': 'Microsoft Translator'},
-    {'value': 'deepl', 'name': 'DeepL'},
+    {'value': 'gemini', 'name': 'Gemini AI'},
   ];
 
   @override
@@ -49,20 +46,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _defaultTargetLanguage = prefs.getString('defaultTargetLanguage') ?? 'th';
+      _defaultTargetLanguage = prefs.getString('targetLanguage') ?? 'th';
       _selectedOCREngine = prefs.getString('selectedOCREngine') ?? 'tesseract';
-      _selectedTranslationAPI = prefs.getString('selectedTranslationAPI') ?? 'google';
-      _autoTranslate = prefs.getBool('autoTranslate') ?? true;
-      _showOriginalText = prefs.getBool('showOriginalText') ?? true;
+      _selectedTranslationAPI = prefs.getString('TranslateAPI') ?? 'google';
+      // _autoTranslate = prefs.getBool('autoTranslate') ?? true;
+      // _showOriginalText = prefs.getBool('showOriginalText') ?? true;
     });
   }
 
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('defaultTargetLanguage', _defaultTargetLanguage);
+    await prefs.setString('targetLanguage', _defaultTargetLanguage);
     await prefs.setString('selectedOCREngine', _selectedOCREngine);
-    await prefs.setString('selectedTranslationAPI', _selectedTranslationAPI);
-    await prefs.setBool('autoTranslate', _autoTranslate);
+    await prefs.setString('TranslateAPI', _selectedTranslationAPI);
+    // await prefs.setBool('autoTranslate', _autoTranslate);
     await prefs.setBool('showOriginalText', _showOriginalText);
 
     ScaffoldMessenger.of(context).showSnackBar(

@@ -31,10 +31,11 @@ class _FloatingButtonState extends State<FloatingButton> {
   bool _showTranslateBar = false;
   String _extractedText = '';
   String _translatedText = '';
-  String _targetLanguage = 'th';
-  String _TranslateAPI = 'google';
+  String _targetLanguage = '';
+  String _TranslateAPI = '';
   final screenshotController = ScreenshotController();
   bool _hasScreenshotPermission = false; // New variable to track permission
+
 
   final Map<String, String> _languageOptions = {
     'th': 'Thai',
@@ -49,8 +50,7 @@ class _FloatingButtonState extends State<FloatingButton> {
 
   final Map<String, String> _translationAPIOptions = {
     'google': 'Google Translate',
-    'microsoft': 'Microsoft Translator',
-    'deepl': 'DeepL',
+    'gemini': 'Gemini AI',
   };
 
   @override
@@ -151,7 +151,7 @@ class _FloatingButtonState extends State<FloatingButton> {
           language: "eng+tha+chi_sim+chi_tra+kor+fra+deu+por+jpn",
           args: {
             "preserve_interword_spaces": "1",
-            "psm": "3",
+            "psm": "6",
             "oem": "3"
           },
         );
@@ -169,6 +169,9 @@ class _FloatingButtonState extends State<FloatingButton> {
             _extractedText = extractedText;
           });
         }
+
+        await _translateText();
+
       } catch (e) {
         print("Overlay: Error processing image with Tesseract OCR: $e");
       }
@@ -282,7 +285,6 @@ class _FloatingButtonState extends State<FloatingButton> {
 
   Widget _buildTranslateBar() {
     // Calculate how much space we have for the white bar
-    // Total width minus close button width (60) minus some padding
     const double closeButtonWidth = 60.0;
     const double totalWidth = 320.0; // Match this with the resizeOverlay width
     const double whiteBarWidth = totalWidth - closeButtonWidth;
@@ -300,129 +302,109 @@ class _FloatingButtonState extends State<FloatingButton> {
               mainAxisSize: MainAxisSize.min, // Do not stretch
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-              // Close button
-              GestureDetector(
-              onTap: _toggleTranslateBar,
-              child: Container(
-                width: closeButtonWidth,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF3854AF),
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 5,
-                      spreadRadius: 1,
+                // Close button
+                GestureDetector(
+                  onTap: _toggleTranslateBar,
+                  child: Container(
+                    width: closeButtonWidth,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3854AF),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 5,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: const Icon(Icons.close, color: Colors.white, size: 30),
-              ),
-            ),
-
-            // White bar - with fixed width to prevent overflow
-            Container(
-              width: whiteBarWidth,
-              height: 60,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 5,
-                    spreadRadius: 1,
+                    child: const Icon(Icons.close, color: Colors.white, size: 30),
                   ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12), // Reduced padding
-              child: Row(
-                  mainAxisSize: MainAxisSize.min, // Do not stretch
-                  children: [
-              // Language dropdown - with smaller max width
-              Container(
-              constraints: const BoxConstraints(maxWidth: 60),
-              child: DropdownButton<String>(
-                value: _targetLanguage,
-                underline: Container(),
-                isDense: true, // Make dropdown more compact
-                iconSize: 16, // Smaller icon
-                icon: const Icon(Icons.keyboard_arrow_down),
-                items: _languageOptions.entries.map((entry) {
-                  return DropdownMenuItem<String>(
-                    value: entry.key,
-                    child: Text(
-                      entry.key.toUpperCase(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12, // Smaller text
-                      ),
+                ),
+
+                // White bar - with fixed width to prevent overflow
+                Container(
+                  width: whiteBarWidth,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(30),
+                      bottomRight: Radius.circular(30),
                     ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _targetLanguage = value);
-                    _savePreferences();
-                  }
-                },
-              ),
-            ),
-
-            // Divider
-            Container(
-              height: 30,
-              width: 1,
-              color: Colors.grey[300],
-              margin: const EdgeInsets.symmetric(horizontal: 4), // Reduced margin
-            ),
-
-            // API Dropdown - more compact
-            Expanded(
-              child: DropdownButton<String>(
-                value: _TranslateAPI,
-                underline: Container(),
-                isDense: true, // Make dropdown more compact
-                iconSize: 16, // Smaller icon
-                icon: const Icon(Icons.keyboard_arrow_down),
-                items: _translationAPIOptions.entries.map((entry) {
-                  return DropdownMenuItem<String>(
-                    value: entry.key,
-                    child: Text(
-                      entry.key.toUpperCase(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12, // Smaller text
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 5,
+                        spreadRadius: 1,
                       ),
-                      overflow: TextOverflow.ellipsis, // Handle text overflow
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _TranslateAPI = value);
-                    _savePreferences();
-                  }
-                },
-              ),
-            ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      // แสดงภาษาที่เลือกแบบ text เฉยๆ
+                      Expanded(
+                        child: Row(
+                          children: [
+                            // ไอคอนภาษา
+                            Icon(Icons.language, size: 16, color: Color(0xFF3854AF)),
+                            SizedBox(width: 4),
+                            // แสดงค่าภาษาที่เลือก
+                            Text(
+                              _languageOptions[_targetLanguage] ?? _targetLanguage.toUpperCase(),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Color(0xFF3854AF),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
 
-                      // Camera icon - smaller
+                      // เส้นแบ่ง
+                      Container(
+                        height: 24,
+                        width: 1,
+                        color: Colors.grey[300],
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+
+                      // แสดง API ที่เลือกแบบ text เฉยๆ
+                      Expanded(
+                        child: Row(
+                          children: [
+                            // ไอคอน API
+                            Icon(Icons.transform, size: 16, color: Color(0xFF3854AF)),
+                            SizedBox(width: 4),
+                            // แสดงค่า API ที่เลือก
+                            Text(
+                              _TranslateAPI.toUpperCase(),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Color(0xFF3854AF),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ปุ่มแปล
                       GestureDetector(
                         onTap: _captureScreen,
                         child: Container(
-                          width: 30, // Reduced size
-                          height: 30, // Reduced size
-                          padding: const EdgeInsets.all(4), // Reduced padding
+                          width: 36,
+                          height: 36,
+                          padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.grey[100],
+                            color: Color(0xFF3854AF).withOpacity(0.1),
                           ),
-                          child: const Icon(Icons.translate, size: 18), // Smaller icon
+                          child: const Icon(Icons.translate, size: 20, color: Color(0xFF3854AF)),
                         ),
                       ),
                     ],
@@ -454,106 +436,243 @@ class _FloatingButtonState extends State<FloatingButton> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-// Container ของแถบสีขาว เปลี่ยนจากกำหนด width เป็น Expanded
-          Expanded(
-            child: Container(
-              height: 60,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 5,
-                    spreadRadius: 1,
-                  ),
-                ],
+          // Header with controls
+          Container(
+            height: 60,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3854AF),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 8), // ลด padding
-              child: Row(
-                mainAxisSize: MainAxisSize.min, // Do not stretch
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Back button - ปรับให้เล็กกว่าเดิม
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isExpanded = false;
+                    });
+                    _resizeOverlay();
+                  },
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    child: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                  ),
+                ),
+
+                // แสดงข้อมูลภาษาแบบกระชับ ใช้ SizedBox จำกัดขนาด
+                SizedBox(
+                  width: 120, // จำกัดความกว้าง
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "To: ",
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      DropdownButton<String>(
+                        value: _targetLanguage,
+                        isDense: true, // ทำให้ dropdown กระชับมากขึ้น
+                        underline: Container(), // ซ่อนเส้นใต้ปกติ
+                        icon: Icon(Icons.arrow_drop_down, color: Colors.white, size: 16),
+                        dropdownColor: Color(0xFF3854AF),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              _targetLanguage = newValue;
+                            });
+                            _savePreferences(); // บันทึกค่าที่เลือกไว้
+                          }
+                        },
+                        items: _languageOptions.entries
+                            .map<DropdownMenuItem<String>>((entry) {
+                          return DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // API selector - ปรับให้เล็กลง
+                DropdownButton<String>(
+                  value: _TranslateAPI,
+                  isDense: true,
+                  underline: Container(),
+                  icon: Icon(Icons.arrow_drop_down, color: Colors.white, size: 16),
+                  dropdownColor: Color(0xFF3854AF),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        _TranslateAPI = newValue;
+                      });
+                      _savePreferences();
+                    }
+                  },
+                  items: _translationAPIOptions.entries
+                      .map<DropdownMenuItem<String>>((entry) {
+                    return DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+
+          // ส่วนแสดงเนื้อหา (ไม่เปลี่ยนแปลง)
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Language Dropdown
-                  Container(
-                    constraints: const BoxConstraints(maxWidth: 60),
-                    child: DropdownButton<String>(
-                      value: _targetLanguage,
-                      underline: Container(),
-                      isDense: true,
-                      iconSize: 16,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      items: _languageOptions.entries.map((entry) {
-                        return DropdownMenuItem<String>(
-                          value: entry.key,
-                          child: Text(
-                            entry.key.toUpperCase(),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _targetLanguage = value);
-                          _savePreferences();
-                        }
-                      },
+                  // Original text section
+                  if (_extractedText.isNotEmpty) ...[
+                    Text(
+                      "Original Text:",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.grey[800],
+                      ),
                     ),
-                  ),
-                  // Divider
-                  Container(
-                    height: 30,
-                    width: 1,
-                    color: Colors.grey[300],
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                  ),
-                  // API Dropdown
-                  Expanded( // ใช้ Expanded ที่นี่
-                    child: DropdownButton<String>(
-                      value: _TranslateAPI,
-                      underline: Container(),
-                      isDense: true,
-                      iconSize: 16,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      items: _translationAPIOptions.entries.map((entry) {
-                        return DropdownMenuItem<String>(
-                          value: entry.key,
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _extractedText,
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Translated text section
+                  if (_translatedText.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Expanded(
                           child: Text(
-                            entry.key.toUpperCase(),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            "Translated (${_languageOptions[_targetLanguage] ?? _targetLanguage}):",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Colors.grey[800],
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _TranslateAPI = value);
-                          _savePreferences();
-                        }
-                      },
+                        ),
+                        if (!_isProcessing)
+                          IconButton(
+                            icon: Icon(Icons.refresh, size: 18),
+                            onPressed: _translateText,
+                            tooltip: "Translate again",
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints.tightFor(width: 24, height: 24),
+                          ),
+                      ],
                     ),
-                  ),
-                  // Camera Icon
-                  GestureDetector(
-                    onTap: _captureScreen,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      padding: const EdgeInsets.all(4),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.grey[100],
+                        color: const Color(0xFFEEF2FF),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF3854AF).withOpacity(0.3)),
                       ),
-                      child: const Icon(Icons.translate, size: 18),
+                      child: _isProcessing
+                          ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                          : Text(
+                        _translatedText,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black,
+                        ),
+                      ),
                     ),
-                  ),
+                  ] else if (_isProcessing) ...[
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text("Translating..."),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // Actions
+                  const SizedBox(height: 16),
+                  if (_translatedText.isNotEmpty && !_isProcessing)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.copy),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: _translatedText));
+                            // Show snackbar for feedback
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Translation copied to clipboard'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          tooltip: "Copy translation",
+                        ),
+                        const SizedBox(width: 16),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: (){
+                            setState(() {
+                              _isExpanded = false;
+                            });
+                            _resizeOverlay();
+                          },
+                          tooltip: "Close and return to floating button",
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
           ),
-
         ],
       ),
     );
@@ -572,12 +691,22 @@ class _FloatingButtonState extends State<FloatingButton> {
       final translatedText = await TranslationService.translateText(
         _extractedText,
         toLanguage: _targetLanguage,
+        translationAPI: _TranslateAPI, // ส่งค่า API ที่เลือกไป
       );
 
       setState(() {
         _translatedText = translatedText;
         _isProcessing = false;
       });
+
+      // เมื่อแปลเรียบร้อยแล้ว ให้เปลี่ยนสถานะเป็น _isExpanded = true
+      // เพื่อแสดงผลลัพธ์การแปลในมุมมองแบบขยาย
+      await Future.delayed(const Duration(milliseconds: 100));
+      setState(() {
+        _isExpanded = true;
+      });
+      await _resizeOverlay();
+
     } catch (e) {
       setState(() {
         _translatedText = 'Translation error: $e';
